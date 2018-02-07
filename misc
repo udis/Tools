@@ -1,0 +1,23 @@
+##### fencing configuration - vbmc #######
+baremetal:
+    iptables -I FORWARD -p udp -m multiport --dports 6230,6231,6232,6233,6234 -j ACCEPT
+undercloud:
+    iptables -I INPUT -p udp -m multiport --dports 6230,6231,6232,6233,6234 -m state --state NEW,ESTABLISHED -j ACCEPT
+    openstack overcloud generate fencing --ipmi-lanplus --ipmi-level administrator --output fencing.yaml instackenv.json
+
+####### ipmitool commands ##########
+     # ipmitool -H [name]-mgmt.scl.lab.tlv.redhat.com -U [username] -P [password] -I lanplus [command/shell]
+     # chassis status
+     # sol activate
+     # To disconnect sol: shift+tilda -> .
+
+###### X system install #########
+     yum group install 'X Window System'
+     ssh -Y -C <ip/h.name>
+
+#### virt edit image for if names #########
+     virt-customize -a overcloud-full.qcow2 --edit /etc/default/grub:s/net.ifnames=0/net.ifnames=1/
+     virt-customize -a overcloud-full.qcow2 --edit /root/anaconda-ks.cfg:s/net.ifnames=0/net.ifnames=1/
+
+
+
