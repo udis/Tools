@@ -39,9 +39,10 @@ openstack server add volume $(openstack server list -c ID -f value) vol1
 
 openstack server add floating ip $(openstack server list -c ID -f value) $(openstack floating ip list -c "Floating IP Address" -f value)
 
-###### Fix Security group ########
-#nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
-###################################
+###### Security group ########
+openstack security group rule create $(openstack security group list --project admin -c ID -f value)
+openstack security group rule create --protocol icmp $(openstack security group list --project admin -c ID -f value)
+
 
 sleep 3
 echo ""
