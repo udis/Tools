@@ -2,7 +2,7 @@
 
 ##### To implement - setup ext-net if needed ####
 #openstack network create --external --provider-network-type flat --provider-physical-network datacentre public
-#openstack subnet create public-sub --subnet-range 10.0.0.0/24 --allocation-pool start=10.0.0.200,end=10.0.0.250 --dns-nameserver 10.35.255.14 --network public
+#openstack subnet create public-sub --subnet-range 10.0.0.0/24 --allocation-pool start=10.0.0.200,end=10.0.0.250 --dns-nameserver 10.46.0.31 --network public
 #
 #
 #
@@ -18,7 +18,7 @@ wget https://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img && ope
 
 openstack network create internal-net
 
-openstack subnet create --subnet-range 192.168.100.0/24 --network internal-net --dns-nameserver 10.35.28.28 internal-subnet
+openstack subnet create --subnet-range 192.168.100.0/24 --network internal-net --dns-nameserver 10.46.0.31 internal-subnet
 
 openstack router create router-1
 
