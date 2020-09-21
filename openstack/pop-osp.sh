@@ -14,7 +14,7 @@ openstack flavor create --ram 512 --disk 1 --vcpus 1 m1.small
 
 #wget http://mirror.isoc.org.il/pub/fedora/releases/22/Cloud/x86_64/Images/Fedora-Cloud-Base-22-20150521.x86_64.qcow2 && openstack image create --disk-format qcow2 --file Fedora-Cloud-Base-22-20150521.x86_64.qcow2 fedora
 
-wget https://download.cirros-cloud.net/0.3.5/cirros-0.3.5-x86_64-disk.img && openstack image create --disk-format raw --file cirros-0.3.5-x86_64-disk.img cirros-0.3.5
+wget https://download.cirros-cloud.net/0.5.0/cirros-0.5.0-x86_64-disk.img && openstack image create --disk-format raw --file cirros-0.5.0-x86_64-disk.img cirros-0.5.0
 
 openstack network create internal-net
 
@@ -31,7 +31,7 @@ openstack volume create --size 1 vol1
 
 openstack floating ip create public
 
-openstack server create --image cirros-0.3.5 --flavor m1.small --nic net-id=$(openstack network show -c id -f value internal-net) ciross-$(echo $RANDOM)
+openstack server create --image cirros-0.5.0 --flavor m1.small --nic net-id=$(openstack network show -c id -f value internal-net) ciross-$(echo $RANDOM)
 
 sleep 30
 
