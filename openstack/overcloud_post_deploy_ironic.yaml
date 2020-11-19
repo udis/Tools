@@ -1,0 +1,248 @@
+---
+
+- name: Post overcloud deploy commands for Ironic enablement
+  gather_facts: true
+  hosts: localhost
+  vars:
+    ext_net: nova
+    bm_vid: 271
+    bm_cidr: 172.23.3.0/24
+    bm_gw: 172.23.3.1
+    bm_start: 172.23.3.200
+    bm_end: 172.23.3.250
+    bm_physnet: tenant
+    dns_servers: 10.11.5.19
+
+  tasks:
+
+    - name: Create tenant private network for virtual instances
+      os_network:
+        cloud: overcloud
+        state: present
+        name: tenant-privtae-net
+
+    - name: Create tenant private subnet for virtual instances
+      os_subnet:
+        cloud: overcloud
+        state: present
+        network_name: tenant-privtae-net
+        name: tenant-privtae-sub
+        cidr: 192.168.100.0/24
+        dns_nameservers:
+           - "{{ dns_servers }}"
+
+    - name: Create custom baremetal network for baremetal instances
+      os_network:
+        cloud: overcloud
+        state: present
+        name: baremetal
+        provider_physical_network: "{{ bm_physnet }}"
+        provider_network_type: vlan
+        provider_segmentation_id: "{{ bm_vid }}"
+        shared: yes
+
+    - name: Create custom baremetal subnet for baremetal instances
+      os_subnet:
+        cloud: overcloud
+        state: present
+        network_name: baremetal
+        name: baremetal-sub
+        cidr: "{{ bm_cidr }}"
+        gateway_ip: "{{ bm_gw }}"
+        allocation_pool_start: "{{ bm_start }}"
+        allocation_pool_end: "{{ bm_end }}"
+        dns_nameservers:
+           - "{{ dns_servers }}"
+
+    - name: Create a shared router between the networks
+      os_router:
+        cloud: overcloud
+        state: present
+        name: shared_router
+        network: "{{ ext_net }}"
+        interfaces:
+          - tenant-privtae-sub
+          - baremetal-sub
+
+    - name: Create flavors for virtual and baremetal instances
+      os_nova_flavor:
+        cloud: overcloud
+        state: present
+        name: "{{ item.name }}"
+        ram: "{{ item.ram }}"
+        vcpus: "{{ item.vcpus }}"
+        disk: "{{ item.disk }}"
+        extra_specs:
+                baremetal: "{{ item.specs }}"
+      loop:
+        - { name: 'm1.small', ram: '512', vcpus: '1', disk: '1', specs: 'false' }
+        - { name: 'baremetal', ram: '4096', vcpus: '2', disk: '39', specs: 'true' }
+
+    - name: Add ironic properties for baremetal flavor
+      shell: |
+         source "{{ lookup('env','HOME') }}/overcloudrc"
+         openstack flavor set baremetal --property resources:CUSTOM_BAREMETAL=1
+         openstack flavor set baremetal --property resources:VCPU=0
+         openstack flavor set baremetal --property resources:MEMORY_MB=0
+         openstack flavor set baremetal --property resources:DISK_GB=0
+
+    - name: Download image for virtual instances
+      get_url:
+        url: https://download.cirros-cloud.net/0.5.0/cirros-0.5.0-x86_64-disk.img
+        dest: "{{ lookup('env','HOME') }}/cirros-0.5.0-x86_64-disk.img"
+
+    - name: Create image for virtual instances
+      os_image:
+        cloud: overcloud
+        name: cirros-0.5.0
+        disk_format: raw
+        state: present
+        filename: "{{ lookup('env','HOME') }}/cirros-0.5.0-x86_64-disk.img"
+
+    - name: Extract overcloudfull images
+      become: true
+      unarchive:
+        src: /usr/share/rhosp-director-images/overcloud-full.tar
+        dest: /usr/share/rhosp-director-images/
+
+    - name: Create image for ironic and nova kernel ramdisk
+      os_image:
+        cloud: overcloud
+        name: "{{ item.name }}"
+        state: present
+        disk_format: "{{ item.format }}"
+        container_format: "{{ item.format }}"
+        filename: "{{ item.filename }}"
+      loop:
+        - { name: 'bm-deploy-kernel', format: 'aki', filename: '/var/lib/ironic/httpboot/agent.kernel' }
+        - { name: 'bm-deploy-ramdisk', format: 'ari', filename: '/var/lib/ironic/httpboot/agent.ramdisk' }
+        - { name: 'overcloud-full-vmlinuz', format: 'aki', filename: '/usr/share/rhosp-director-images/overcloud-full.vmlinuz' }
+        - { name: 'overcloud-full-initrd', format: 'aki', filename: '/usr/share/rhosp-director-images/overcloud-full.vmlinuz' }
+
+    - name: Get kernel image ID fact
+      os_image_info:
+        cloud: overcloud
+        image: bm-deploy-kernel
+      register: kimage
+
+    - name: Get ramdisk image ID fact
+      os_image_info:
+        cloud: overcloud
+        image: bm-deploy-ramdisk
+      register: rdimage
+
+    - name: Create image for final baremetal instance
+      os_image:
+        cloud: overcloud
+        name: overcloud-full
+        state: present
+        disk_format: qcow2
+        container_format: bare
+        filename: /usr/share/rhosp-director-images/overcloud-full.qcow2
+        properties:
+          kernel_id: "{{ kimage.openstack_image.id }}"
+          ramdisk_id: "{{ rdimage.openstack_image.id }}"
+
+    - name: Create host aggreagte for baremetal instances
+      os_nova_host_aggregate:
+        cloud: overcloud
+        state: present
+        name: "{{ item.name }}"
+        hosts:
+          - "{{ item.host }}"
+        metadata:
+          baremetal: "{{ item.meta }}"
+      loop:
+        - { name: 'baremetal-hosts', host: 'controller-0.redhat.local', meta: 'true' }
+        - { name: 'virtual-hosts', host: 'compute-0.redhat.local', meta: 'false' }
+
+    - name: Create baremetal nodes on overcloud
+      shell: |
+         source "{{ lookup('env','HOME') }}/overcloudrc"
+         openstack baremetal create "{{ lookup('env','HOME') }}/overcloud-nodes.yaml"
+      #tags: import
+        #os_ironic:
+        #  cloud: "overcloud"
+        #ironic_url: 'https://10.8.100.190:13385'
+        #auth_type: ''
+        #auth: None
+        #name: "{{ item.name }}"
+        #driver: "ipmi"
+        #properties:
+        #  cpus: 1
+        #  cpu_arch: "x86_64"
+        #  ram: 4096
+        #  disk_size: 20
+        #nics:
+        #  - mac: "{{ item.mac }}"
+        #driver_info:
+        #  power:
+        #    ipmi_address: "{{ item.ipmi_add }}"
+        #    ipmi_username: "root"
+        #    ipmi_password: "calvin"
+        #loop:
+        #- { name: 'node0', mac: 'f8:f2:1e:1b:06:02', ipmi_add: 'titan34-bmc.mgmt.lab.eng.tlv2.redhat.com' }
+        #- { name: 'node1', mac: 'f8:f2:1e:16:e5:02', ipmi_add: 'titan23-bmc.mgmt.lab.eng.tlv2.redhat.com' }
+
+    - name: Add custom parameters for baremetal nodes
+      tags: bm
+      shell: |
+         source "{{ lookup('env','HOME') }}/overcloudrc" ;\
+         openstack baremetal node set node0 --resource-class baremetal ;\
+         openstack baremetal node set node1 --resource-class baremetal ;\
+         openstack baremetal node set node0 --driver-info deploy_kernel=$(openstack image list --name bm-deploy-kernel -c ID -f value)  --driver-info deploy_ramdisk=$(openstack image list --name bm-deploy-ramdisk -c ID -f value) ;\
+         openstack baremetal node set node1 --driver-info deploy_kernel=$(openstack image list --name bm-deploy-kernel -c ID -f value)  --driver-info deploy_ramdisk=$(openstack image list --name bm-deploy-ramdisk -c ID -f value) ;
+      ignore_errors: yes
+
+    - name: Move baremetal nodes to manage state
+      shell: |
+         source "{{ lookup('env','HOME') }}/overcloudrc" ;\
+         openstack baremetal node manage --wait 30 node0 && \
+         openstack baremetal node manage --wait 30 node1 &&\
+         openstack baremetal node provide --wait 600 node0 &&\
+         openstack baremetal node provide --wait 600 node1
+
+    - name: Create security group rule for tcp traffic
+      os_security_group_rule:
+        cloud: overcloud
+        project: admin
+        security_group: default
+        protocol: tcp
+        remote_ip_prefix: 0.0.0.0/0
+
+    - name: Create security group rule for icmp traffic
+      os_security_group_rule:
+        cloud: overcloud
+        project: admin
+        security_group: default
+        protocol: icmp
+        remote_ip_prefix: 0.0.0.0/0
+
+    - name: Create keypair
+      os_keypair:
+        cloud: overcloud
+        state: present
+        name: undercloud_key
+        public_key_file: /home/stack/.ssh/id_rsa.pub
+
+    - name: Boot baremetal instance
+      os_server:
+        state: present
+        cloud: overcloud
+        name: BM-node-01
+        image: overcloud-full
+        key_name: undercloud_key
+        timeout: 200
+        flavor: baremetal
+        network: baremetal
+
+    - name: Boot Virtual instance
+      os_server:
+        state: present
+        cloud: overcloud
+        name: VM-node-01
+        image: cirros-0.5.0
+        key_name: undercloud_key
+        timeout: 200
+        flavor: m1.small
+        network: baremetal
