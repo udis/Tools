@@ -31,7 +31,7 @@ openstack volume create --size 1 vol1
 
 openstack floating ip create public
 
-openstack server create --image cirros-0.5.0 --flavor m1.small --nic net-id=$(openstack network show -c id -f value internal-net) ciross-$(echo $RANDOM)
+openstack server create --image cirros-0.5.2 --flavor m1.small --nic net-id=$(openstack network show -c id -f value internal-net) ciross-$(echo $RANDOM)
 
 sleep 30
 
