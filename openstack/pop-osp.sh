@@ -14,7 +14,7 @@ openstack flavor create --ram 512 --disk 1 --vcpus 1 m1.small
 
 #wget http://mirror.isoc.org.il/pub/fedora/releases/22/Cloud/x86_64/Images/Fedora-Cloud-Base-22-20150521.x86_64.qcow2 && openstack image create --disk-format qcow2 --file Fedora-Cloud-Base-22-20150521.x86_64.qcow2 fedora
 
-wget https://download.cirros-cloud.net/0.5.0/cirros-0.5.2-x86_64-disk.img && openstack image create --disk-format raw --file cirros-0.5.2-x86_64-disk.img cirros-0.5.0
+wget https://download.cirros-cloud.net/0.5.0/cirros-0.5.2-x86_64-disk.img && openstack image create --disk-format raw --file cirros-0.5.2-x86_64-disk.img cirros-0.5.2
 
 openstack network create internal-net
 
